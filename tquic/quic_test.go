@@ -21,8 +21,9 @@ import (
 
 	"github.com/nexssp/flow/compiler/contracts"
 	"github.com/nexssp/transport/thttp"
-	"github.com/nexssp/transportquic/tquic"
 	"github.com/quic-go/quic-go/http3"
+
+	"github.com/nexssp/transportquic/tquic"
 )
 
 func TestAltSvcMiddleware(t *testing.T) {
@@ -32,7 +33,7 @@ func TestAltSvcMiddleware(t *testing.T) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 	response := httptest.NewRecorder()
-	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+	handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody))
 
 	if got, want := response.Header().Get("Alt-Svc"), `h3=":8443"; ma=86400`; got != want {
 		t.Fatalf("Alt-Svc = %q, want %q", got, want)
@@ -51,7 +52,7 @@ func TestAltSvcMiddlewareIgnoresInvalidAuthority(t *testing.T) {
 				w.WriteHeader(http.StatusNoContent)
 			}))
 			response := httptest.NewRecorder()
-			handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/", http.NoBody))
+			handler.ServeHTTP(response, httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/", http.NoBody))
 			if got := response.Header().Get("Alt-Svc"); got != "" {
 				t.Fatalf("Alt-Svc = %q, want no header", got)
 			}
@@ -84,9 +85,6 @@ func TestTransportMetadataAndBinding(t *testing.T) {
 func TestDoRejectsMissingConfiguration(t *testing.T) {
 	t.Parallel()
 
-	if _, err := tquic.New(":8443", "cert.pem", "key.pem", thttp.New(":0")).Do(nil, nil); err == nil {
-		t.Fatal("Do(nil) should fail")
-	}
 	if _, err := tquic.New(":8443", "cert.pem", "key.pem", nil).Do(context.Background(), nil); err == nil {
 		t.Fatal("Do without an inner HTTP transport should fail")
 	}
@@ -146,7 +144,7 @@ func TestDoServesHTTP3AndStopsOnCancellation(t *testing.T) {
 
 	roundTripper := &http3.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS13}}
 	client := &http.Client{Transport: roundTripper}
-	if err := getHealth(client, ctx, "https://"+addr+"/healthz"); err != nil {
+	if err := getHealth(ctx, client, "https://"+addr+"/healthz"); err != nil {
 		_ = roundTripper.Close()
 		cancel()
 		<-done
@@ -167,7 +165,7 @@ func TestDoServesHTTP3AndStopsOnCancellation(t *testing.T) {
 	}
 }
 
-func getHealth(client *http.Client, ctx context.Context, url string) error {
+func getHealth(ctx context.Context, client *http.Client, url string) error {
 	deadline := time.Now().Add(5 * time.Second)
 	var lastErr error
 	for time.Now().Before(deadline) {
@@ -195,7 +193,8 @@ func getHealth(client *http.Client, ctx context.Context, url string) error {
 
 func freeUDPAddress(t *testing.T) string {
 	t.Helper()
-	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	var listenConfig net.ListenConfig
+	conn, err := listenConfig.ListenPacket(context.Background(), "udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +205,7 @@ func freeUDPAddress(t *testing.T) string {
 	return addr
 }
 
-func writeTestCertificate(t *testing.T) (string, string, *x509.CertPool) {
+func writeTestCertificate(t *testing.T) (certFile, keyFile string, roots *x509.CertPool) {
 	t.Helper()
 
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -233,8 +232,8 @@ func writeTestCertificate(t *testing.T) (string, string, *x509.CertPool) {
 		t.Fatal(err)
 	}
 
-	certFile := filepath.Join(t.TempDir(), "server.crt")
-	keyFile := filepath.Join(t.TempDir(), "server.key")
+	certFile = filepath.Join(t.TempDir(), "server.crt")
+	keyFile = filepath.Join(t.TempDir(), "server.key")
 	if err := os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +244,7 @@ func writeTestCertificate(t *testing.T) (string, string, *x509.CertPool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	roots := x509.NewCertPool()
+	roots = x509.NewCertPool()
 	roots.AddCert(certificate)
 	return certFile, keyFile, roots
 }

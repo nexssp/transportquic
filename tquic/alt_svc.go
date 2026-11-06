@@ -34,5 +34,5 @@ func altSvcValue(authority string) string {
 	if err != nil || portNumber < 1 || portNumber > 65535 {
 		return ""
 	}
-	return fmt.Sprintf(`h3="%s"; ma=86400`, authority)
+	return fmt.Sprintf(`h3=%q; ma=86400`, authority)
 }

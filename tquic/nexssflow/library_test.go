@@ -26,8 +26,9 @@ import (
 	"github.com/nexssp/kernel/action"
 	"github.com/nexssp/transport/thttp"
 	thttpflow "github.com/nexssp/transport/thttp/nexssflow"
-	"github.com/nexssp/transportquic/tquic"
 	"github.com/quic-go/quic-go/http3"
+
+	"github.com/nexssp/transportquic/tquic"
 )
 
 func TestBundleRegistersListenerAndUsesSharedRouteModifier(t *testing.T) {
@@ -153,7 +154,8 @@ func assertHealthResponse(t *testing.T, client *http.Client, url string) {
 
 func freeUDPAddress(t *testing.T) string {
 	t.Helper()
-	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	var listenConfig net.ListenConfig
+	conn, err := listenConfig.ListenPacket(context.Background(), "udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +166,7 @@ func freeUDPAddress(t *testing.T) string {
 	return addr
 }
 
-func writeTestCertificate(t *testing.T) (string, string, *x509.CertPool) {
+func writeTestCertificate(t *testing.T) (certFile, keyFile string, roots *x509.CertPool) {
 	t.Helper()
 
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -191,8 +193,8 @@ func writeTestCertificate(t *testing.T) (string, string, *x509.CertPool) {
 		t.Fatal(err)
 	}
 
-	certFile := filepath.Join(t.TempDir(), "server.crt")
-	keyFile := filepath.Join(t.TempDir(), "server.key")
+	certFile = filepath.Join(t.TempDir(), "server.crt")
+	keyFile = filepath.Join(t.TempDir(), "server.key")
 	if err := os.WriteFile(certFile, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +205,7 @@ func writeTestCertificate(t *testing.T) (string, string, *x509.CertPool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	roots := x509.NewCertPool()
+	roots = x509.NewCertPool()
 	roots.AddCert(certificate)
 	return certFile, keyFile, roots
 }

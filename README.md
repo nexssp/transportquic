@@ -52,3 +52,14 @@ The `tquic/nexssflow` package adds a `tquic.listen` action and reuses the shared
 ```
 
 The HTTP route declaration is shared; the listener addresses and protocols are not. This starts TCP HTTP on port 8080 and HTTP/3 over UDP on port 8443. For HTTP/3 discovery, apply `tquic.AltSvcMiddleware` to an existing HTTPS/TCP handler clients reach first. See the separate NFlow examples for local certificate setup and run commands.
+
+## Development
+
+Install [Task](https://taskfile.dev/) and golangci-lint v2.14.0, the version used by CI:
+
+```sh
+go install github.com/go-task/task/v3/cmd/task@latest
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.14.0
+```
+
+Run `task tools` to install the optional test-output and vulnerability tools. Use `task build`, `task test`, `task lint`, and `task fmt` for individual checks; `task ci` runs lint, race-enabled tests, and the vulnerability scan. The `.golangci.yml` policy follows `nexssp/flow`.
